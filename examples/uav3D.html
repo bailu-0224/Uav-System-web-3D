@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>uav3D</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <link type="text/css" rel="stylesheet" href="main.css">
+</head>
+
+<body>
+<div id="info">
+    <!--			<a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - GLTFLoader + compression extensions<br />-->
+    <!--			<a href="https://sketchfab.com/3d-models/coffeemat-7fb196a40a6e4697aad9ca2f75c8b33d" target="_blank" rel="noopener">Coffeemat</a> by-->
+    <!--			<a href="https://sketchfab.com/OFFcours1" target="_blank" rel="noopener">Roman Red</a>-->
+</div>
+
+<script type="module">
+
+    import * as THREE from '../build/three.module.js';
+    import Stats from './jsm/libs/stats.module.js';
+
+    import { RoomEnvironment } from './jsm/environments/RoomEnvironment.js';
+    import { OrbitControls } from './jsm/controls/OrbitControls.js';
+    import { GLTFLoader } from './jsm/loaders/GLTFLoader.js';
+    // import {DRACOLoader} from "./jsm/loaders/DRACOLoader.js";
+    import { KTX2Loader } from './jsm/loaders/KTX2Loader.js';
+    import { MeshoptDecoder } from './jsm/libs/meshopt_decoder.module.js';
+
+    let camera, scene, renderer;
+    let mixer =[];
+    // const dracoLoader  =new DRACOLoader();
+    const clock = new THREE.Clock();
+    const container = document.createElement( 'div' );
+    document.body.appendChild( container );
+    const stats = new Stats();
+    container.appendChild( stats.dom );
+    init();
+    render();
+
+    function init() {
+
+
+
+        const plane = [];
+        renderer = new THREE.WebGLRenderer( { antialias: true } );
+        renderer.setPixelRatio( window.devicePixelRatio );
+        renderer.setSize( window.innerWidth, window.innerHeight );
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        container.appendChild( renderer.domElement );
+
+        camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 2000 );
+        camera.position.set( 150, 100, 150 );
+        camera.lookAt(-1000,100,-1000);
+
+        const environment = new RoomEnvironment();
+        const pmremGenerator = new THREE.PMREMGenerator( renderer );
+
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color( 0xbbbbbb );
+        scene.environment = pmremGenerator.fromScene( environment ).texture;
+
+        const grid = new THREE.GridHelper( 500, 10, 0xffffff, 0xffffff );
+        grid.material.opacity = 0.5;
+        grid.material.depthWrite = false;
+        grid.material.transparent = true;
+        scene.add( grid );
+        // dracoLoader.setDecoderPath('models/gltf/');
+        // dracoLoader.setDecoderConfig({type:'js'});
+        // dracoLoader.preload();
+        const ktx2Loader = new KTX2Loader()
+            .setTranscoderPath( 'js/libs/basis/' )
+            .detectSupport( renderer );
+
+        const loader = new GLTFLoader().setPath( 'models/gltf/' );
+        loader.setKTX2Loader( ktx2Loader );
+        loader.setMeshoptDecoder( MeshoptDecoder );
+        // loader.setDRACOLoader(dracoLoader);
+        loader.load( '8.glb', function ( gltf ) {
+            scene.add( gltf.scene );
+            render();
+        } );
+        const axes = new THREE.AxesHelper(1000);
+        // scene.add(axes);
+        //构建一个坐标轴,蓝色是x轴，红色是z轴，绿色是y轴
+
+        loader.load('7.glb',function (gltf) {
+            plane[0] = gltf.scene;
+            plane[0].position.z = 20;
+            plane[0].position.y = 50;
+            plane[0].scale.set(20,20,20);
+            for(let i=1;i<10;i++)
+            {
+                plane[i] = plane[0].clone();
+                plane[i].position.z = 20+i*10;
+                plane[i].position.y = 50;
+                scene.add(plane[i]);
+            }
+            for(let i=0;i<10;i++)
+            {
+                mixer[i] = new THREE.AnimationMixer( plane[i] );
+                mixer[i].clipAction( gltf.animations[ 0 ] ).play();
+            }
+
+            animate();
+            scene.add(plane[0]);
+            render();
+        })
+
+
+
+        // const path = "../assets/textures/cubemap/parliament/";//设置路径
+        // const directions = ["3", "1", "6", "2", "5", "4"];//获取对象
+        // const format = ".jpg";//格式
+        // //创建盒子，并设置盒子的大小为( 5000, 5000, 5000 )
+        // const skyGeometry = new THREE.BoxGeometry(2000, 2000, 2000);
+        // //设置盒子材质
+        // const materialArray = [];
+        // for (let i = 0; i < 6; i++)
+        // 	materialArray.push(new THREE.MeshBasicMaterial({
+        // 		map: THREE.ImageUtils.loadTexture(path + directions[i] + format),//将图片纹理贴上
+        // 		side: THREE.BackSide/*镜像翻转，如果设置镜像翻转，那么只会看到黑漆漆的一片，因为你身处在盒子的内部，所以一定要设置镜像翻转。*/
+        // 	}));
+        // const skyMaterial = new THREE.MeshFaceMaterial(materialArray);
+        // const skyBox = new THREE.Mesh(skyGeometry, skyMaterial);//创建一个完整的天空盒，填入几何模型和材质的参数
+        // scene.add(skyBox);//在场景中加入天空盒
+
+        const controls = new OrbitControls( camera, renderer.domElement );
+        controls.addEventListener( 'change', render ); // use if there is no animation loop
+        // controls.minDistance = 400;
+        // controls.maxDistance = 1000;
+        controls.target.set( 10, 90, - 16 );
+        controls.update();
+
+        window.addEventListener( 'resize', onWindowResize );
+
+    }
+
+    function onWindowResize() {
+
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+
+        renderer.setSize( window.innerWidth, window.innerHeight );
+
+        render();
+
+    }
+
+    //
+
+    function render() {
+        requestAnimationFrame(render);
+        renderer.render( scene, camera );
+
+    }
+    function animate() {
+        requestAnimationFrame( animate );
+        const delta = clock.getDelta();
+        stats.update();
+        for(let i=0;i<10;i++)
+            mixer[i].update( delta );
+
+
+    }
+</script>
+
+</body>
+</html>
